@@ -28,10 +28,7 @@ class LevelManager {
         return {
             number: levelNumber,
             viruses: viruses,
-            fallSpeed: Math.max(
-                GAME.MIN_FALL_SPEED, 
-                GAME.INITIAL_FALL_SPEED - ((levelNumber - 1) * GAME.SPEED_INCREASE_PER_LEVEL)
-            )
+            fallSpeed: GAME.INITIAL_FALL_SPEED
         };
     }
 

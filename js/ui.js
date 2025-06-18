@@ -49,6 +49,7 @@ class UI {
         // Instructions Button
         document.getElementById('back-from-instructions').addEventListener('click', () => {
             this.showScreen('mainMenu');
+            console.log('Back from instructions clicked');
         });
         
         // Game Screen Buttons

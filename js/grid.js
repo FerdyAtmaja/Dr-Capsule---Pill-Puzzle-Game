@@ -74,7 +74,7 @@ class Grid {
     checkForMatches() {
         const matches = new Set();
         
-        // Only check vertical matches (4 in a vertical line)
+        // Check vertical matches (4 in a vertical line)
         for (let x = 0; x < this.width; x++) {
             let currentColor = null;
             let matchLength = 0;
@@ -113,6 +113,45 @@ class Grid {
             }
         }
         
+        // Check horizontal matches (4 in a horizontal line)
+        for (let y = 0; y < this.height; y++) {
+            let currentColor = null;
+            let matchLength = 0;
+            let matchStart = 0;
+            
+            for (let x = 0; x < this.width; x++) {
+                const cell = this.cells[y][x];
+                
+                if (cell && cell.color === currentColor) {
+                    matchLength++;
+                } else {
+                    // Check if previous sequence was a match
+                    if (matchLength >= 4) {
+                        for (let i = matchStart; i < x; i++) {
+                            matches.add(`${i},${y}`);
+                        }
+                    }
+                    
+                    // Start new potential match
+                    if (cell) {
+                        currentColor = cell.color;
+                        matchLength = 1;
+                        matchStart = x;
+                    } else {
+                        currentColor = null;
+                        matchLength = 0;
+                    }
+                }
+            }
+            
+            // Check match at the end of row
+            if (matchLength >= 4) {
+                for (let i = matchStart; i < this.width; i++) {
+                    matches.add(`${i},${y}`);
+                }
+            }
+        }
+        
         return matches;
     }
 
@@ -131,6 +170,19 @@ class Grid {
     clearMatches(matches) {
         let virusesCleared = 0;
         
+        // First, collect all connection IDs that will be affected by the matches
+        const affectedConnections = new Set();
+        
+        matches.forEach(match => {
+            const [x, y] = match.split(',').map(Number);
+            const cell = this.cells[y][x];
+            
+            if (cell && cell.type === 'capsule' && cell.connected) {
+                affectedConnections.add(cell.connected);
+            }
+        });
+        
+        // Now clear the matches
         matches.forEach(match => {
             const [x, y] = match.split(',').map(Number);
             
@@ -141,14 +193,60 @@ class Grid {
             this.cells[y][x] = null;
         });
         
+        // After clearing matches, we need to check if any capsule parts are now disconnected
+        // This is the Doctor Mario behavior - capsule halves only become independent after one is cleared
+        for (let y = 0; y < this.height; y++) {
+            for (let x = 0; x < this.width; x++) {
+                const cell = this.cells[y][x];
+                
+                if (cell && cell.type === 'capsule' && cell.connected && affectedConnections.has(cell.connected)) {
+                    // This cell has a connection ID that was affected by the matches
+                    // Check if it still has a connected partner
+                    let hasConnection = false;
+                    
+                    // Check all four directions
+                    const directions = ['left', 'right', 'up', 'down'];
+                    for (const dir of directions) {
+                        let nx = x, ny = y;
+                        
+                        switch (dir) {
+                            case 'left': nx--; break;
+                            case 'right': nx++; break;
+                            case 'up': ny--; break;
+                            case 'down': ny++; break;
+                        }
+                        
+                        const neighbor = this.getCellContent(nx, ny);
+                        if (neighbor && 
+                            neighbor.type === 'capsule' && 
+                            neighbor.connected === cell.connected) {
+                            hasConnection = true;
+                            break;
+                        }
+                    }
+                    
+                    // If no connection found, this is now a standalone block
+                    if (!hasConnection) {
+                        this.cells[y][x].connected = null;
+                    }
+                }
+            }
+        }
+        
         return virusesCleared;
     }
 
     applyGravity() {
-        let blocksFell = false;
-        
-        // First, identify disconnected capsule parts
+        // First, identify disconnected capsule parts that should fall
         const disconnectedParts = this.findDisconnectedParts();
+        
+        // If no disconnected parts, return immediately
+        if (disconnectedParts.size === 0) {
+            return false;
+        }
+        
+        // Create a map of falling blocks and their destinations
+        const fallingBlocks = [];
         
         // Process each column separately, bottom to top
         for (let x = 0; x < this.width; x++) {
@@ -159,8 +257,8 @@ class Grid {
                 // Skip empty cells and viruses (viruses don't fall)
                 if (!cell || cell.type === 'virus') continue;
                 
-                // Only process disconnected capsule parts
-                if (cell.type === 'capsule' && !disconnectedParts.has(`${x},${y}`)) continue;
+                // Only process blocks that were identified as needing to fall
+                if (!disconnectedParts.has(`${x},${y}`)) continue;
                 
                 // Check if there's empty space below
                 let fallDistance = 0;
@@ -172,22 +270,143 @@ class Grid {
                 }
                 
                 if (fallDistance > 0) {
-                    // Move the block down
-                    this.cells[y + fallDistance][x] = cell;
+                    // Add to falling blocks list
+                    fallingBlocks.push({
+                        startX: x,
+                        startY: y,
+                        endY: y + fallDistance,
+                        cell: { 
+                            type: cell.type,
+                            color: cell.color,
+                            connected: cell.connected ? cell.connected : null
+                        }
+                    });
+                    
+                    // Clear the original position
                     this.cells[y][x] = null;
-                    blocksFell = true;
                 }
             }
         }
         
-        return blocksFell;
+        // If no blocks are falling, return false
+        if (fallingBlocks.length === 0) {
+            return false;
+        }
+        
+        // Animate the falling blocks
+        return this.animateFallingBlocks(fallingBlocks);
+    }
+    
+    // Animate falling blocks with a smooth transition
+    animateFallingBlocks(fallingBlocks) {
+        return new Promise(resolve => {
+            // Create a temporary state for animation
+            const animationSteps = GAME.FALL_ANIMATION_STEPS;
+            let currentStep = 0;
+            
+            const animateStep = () => {
+                currentStep++;
+                
+                // If we've completed all steps, place blocks in final positions
+                if (currentStep > animationSteps) {
+                    // Place all blocks in their final positions
+                    fallingBlocks.forEach(block => {
+                        this.cells[block.endY][block.startX] = block.cell;
+                    });
+                    
+                    // Render the final state
+                    this.render();
+                    
+                    // Always resolve with true to indicate blocks have fallen
+                    resolve(true);
+                    return;
+                }
+                
+                // Render the intermediate animation state
+                this.renderFallingAnimation(fallingBlocks, currentStep, animationSteps);
+                
+                // Schedule the next animation step
+                setTimeout(animateStep, GAME.FALL_ANIMATION_STEP);
+            };
+            
+            // Start the animation
+            animateStep();
+        });
+    }
+    
+    // Render an intermediate state of falling animation
+    renderFallingAnimation(fallingBlocks, currentStep, totalSteps) {
+        // Clear the game board
+        this.element.innerHTML = '';
+        this.element.style.gridTemplateColumns = `repeat(${this.width}, 1fr)`;
+        this.element.style.gridTemplateRows = `repeat(${this.height}, 1fr)`;
+        
+        // Create a temporary grid for rendering
+        const tempGrid = Array(this.height).fill().map(() => Array(this.width).fill(null));
+        
+        // Copy the current grid state
+        for (let y = 0; y < this.height; y++) {
+            for (let x = 0; x < this.width; x++) {
+                tempGrid[y][x] = this.cells[y][x];
+            }
+        }
+        
+        // Calculate intermediate positions for falling blocks
+        fallingBlocks.forEach(block => {
+            const progress = currentStep / totalSteps;
+            const currentY = Math.floor(block.startY + (block.endY - block.startY) * progress);
+            
+            // Place the block at its current position for this animation frame
+            tempGrid[currentY][block.startX] = block.cell;
+        });
+        
+        // Render the temporary grid
+        for (let y = 0; y < this.height; y++) {
+            for (let x = 0; x < this.width; x++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.dataset.x = x;
+                cell.dataset.y = y;
+                
+                const content = tempGrid[y][x];
+                if (content) {
+                    const contentElement = document.createElement('div');
+                    
+                    if (content.type === 'virus') {
+                        contentElement.className = `virus ${content.color}`;
+                    } else if (content.type === 'capsule') {
+                        contentElement.className = `capsule-part ${content.color}`;
+                        
+                        // Add connection visual cues if needed
+                        if (content.connected) {
+                            contentElement.dataset.connected = content.connected;
+                        }
+                        
+                        // Add falling animation class if this is a falling block
+                        const isFalling = fallingBlocks.some(block => 
+                            block.startX === x && 
+                            Math.floor(block.startY + (block.endY - block.startY) * (currentStep / totalSteps)) === y
+                        );
+                        
+                        if (isFalling) {
+                            contentElement.classList.add('falling');
+                        }
+                    }
+                    
+                    cell.appendChild(contentElement);
+                }
+                
+                this.element.appendChild(cell);
+            }
+        }
     }
     
     // Find capsule parts that are disconnected (should fall)
     findDisconnectedParts() {
         const disconnectedParts = new Set();
+        const standaloneBlocks = new Set();
         
-        // First pass: Find all capsule parts that have been split
+        // First pass: Find only capsule parts that have been split due to matches
         // (no longer connected to their other half)
         for (let y = 0; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
@@ -222,33 +441,57 @@ class Grid {
                         }
                     }
                     
-                    // If no connection found, this is a disconnected piece
+                    // If no connection found, this is a disconnected piece due to a match
                     if (!hasConnection) {
-                        disconnectedParts.add(`${x},${y}`);
+                        standaloneBlocks.add(`${x},${y}`);
+                        // Mark this as a standalone block by removing the connection ID
+                        this.cells[y][x].connected = null;
                     }
+                } else if (cell.type === 'capsule' && !cell.connected) {
+                    // Already a standalone block
+                    standaloneBlocks.add(`${x},${y}`);
                 }
             }
         }
         
-        // Second pass: Check for unsupported capsule parts
-        // (capsule parts with nothing below them)
+        // Second pass: Only check for gravity on standalone blocks
+        // Connected capsule parts should never fall individually
         for (let x = 0; x < this.width; x++) {
-            for (let y = this.height - 1; y >= 0; y--) {
+            // Process from bottom to top to properly handle stacked blocks
+            for (let y = this.height - 2; y >= 0; y--) {
                 const cell = this.cells[y][x];
                 
                 // Skip empty cells and viruses
                 if (!cell || cell.type === 'virus') continue;
                 
                 if (cell.type === 'capsule') {
-                    // Check if there's empty space below
-                    if (y < this.height - 1 && this.cells[y + 1][x] === null) {
-                        disconnectedParts.add(`${x},${y}`);
+                    // Check if this is a standalone block (not part of a connected capsule)
+                    if (!cell.connected || standaloneBlocks.has(`${x},${y}`)) {
+                        // Check if there's empty space below
+                        if (this.cells[y + 1][x] === null) {
+                            disconnectedParts.add(`${x},${y}`);
+                        }
+                        // Also check if the part below is a disconnected part that will fall
+                        else if (this.cells[y + 1][x] && 
+                                this.cells[y + 1][x].type === 'capsule' && 
+                                disconnectedParts.has(`${x},${y+1}`)) {
+                            disconnectedParts.add(`${x},${y}`);
+                        }
                     }
                 }
             }
         }
         
         return disconnectedParts;
+    }
+
+    // Check for matches and clear them immediately
+    checkAndClearMatches() {
+        const matches = this.checkForMatches();
+        if (matches.size > 0) {
+            return this.clearMatches(matches);
+        }
+        return 0;
     }
 
     countViruses() {

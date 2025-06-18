@@ -149,7 +149,15 @@ class Game {
                 this.handlePlacedCapsule();
             }
         } else {
-            // If there's no active capsule, spawn a new one
+            // Check for any matches that might have formed
+            const matches = this.grid.checkForMatches();
+            if (matches.size > 0) {
+                // Process matches if found
+                this.handlePlacedCapsule();
+                return;
+            }
+            
+            // If there's no active capsule and no matches, spawn a new one
             this.spawnCapsule();
         }
     }
@@ -219,28 +227,35 @@ class Game {
     }
 
     handlePlacedCapsule() {
-        // Process matches and gravity until the board stabilizes
-        setTimeout(() => {
-            this.processMatchesAndGravity();
-        }, GAME.MATCH_DELAY);
+        // Process matches and gravity immediately
+        // Use a minimal timeout to allow the UI to update first
+        setTimeout(async () => {
+            await this.processMatchesAndGravity();
+        }, 10);
     }
 
-    processMatchesAndGravity() {
+    async processMatchesAndGravity() {
         // Set game state to matching
         this.gameState = GAME_STATE.MATCHING;
         
-        // Check for matches
-        const matches = this.grid.checkForMatches();
+        // Process matches and gravity until the board stabilizes
+        let boardStabilized = false;
+        let chainReactionOccurred = false;
         
-        if (matches.size > 0) {
-            // Show match effect
-            this.ui.showMatchEffect(matches, this.grid);
+        while (!boardStabilized) {
+            // Check for matches
+            const matches = this.grid.checkForMatches();
             
-            // Play match sound
-            this.audioManager.play('MATCH');
-            
-            // Wait a moment to show the match animation
-            setTimeout(() => {
+            if (matches.size > 0) {
+                // Show match effect
+                this.ui.showMatchEffect(matches, this.grid);
+                
+                // Play match sound
+                this.audioManager.play('MATCH');
+                
+                // Wait a moment to show the match animation
+                await new Promise(resolve => setTimeout(resolve, GAME.MATCH_DELAY));
+                
                 // Clear matches and update score
                 const virusesCleared = this.grid.clearMatches(matches);
                 
@@ -259,48 +274,68 @@ class Game {
                 }
                 
                 // Apply gravity after a short delay
-                setTimeout(() => {
-                    this.gameState = GAME_STATE.FALLING;
-                    const blocksFell = this.grid.applyGravity();
-                    this.grid.render();
+                await new Promise(resolve => setTimeout(resolve, GAME.GRAVITY_DELAY));
+                
+                this.gameState = GAME_STATE.FALLING;
+                
+                // Apply gravity with animation
+                const gravityResult = await this.grid.applyGravity();
+                
+                // Play drop sound if blocks fell
+                if (gravityResult) {
+                    chainReactionOccurred = true;
+                    this.audioManager.play('DROP');
                     
-                    // Update UI
-                    this.updateUI();
+                    // Wait a moment after blocks have fallen
+                    await new Promise(resolve => setTimeout(resolve, GAME.GRAVITY_DELAY));
                     
-                    // If blocks fell, check for more matches
-                    if (blocksFell) {
-                        setTimeout(() => {
-                            this.processMatchesAndGravity();
-                        }, GAME.GRAVITY_DELAY);
-                    } else {
-                        // Reset combo if no viruses were cleared
-                        if (virusesCleared === 0) {
-                            this.combo = 0;
-                        }
-                        
-                        // Check if all viruses are cleared
-                        if (this.grid.countViruses() === 0) {
-                            this.levelComplete();
-                        } else {
-                            // Continue the game
-                            this.gameState = GAME_STATE.PLAYING;
-                            this.spawnCapsule();
-                        }
+                    // Continue the loop to check for new matches
+                    // The next iteration will check for matches
+                } else {
+                    // No blocks fell, check if we need to continue the loop
+                    const newMatches = this.grid.checkForMatches();
+                    if (newMatches.size === 0) {
+                        boardStabilized = true;
                     }
-                }, GAME.GRAVITY_DELAY);
-            }, GAME.MATCH_DELAY);
-        } else {
-            // No matches, reset combo and continue
-            this.combo = 0;
-            this.gameState = GAME_STATE.PLAYING;
-            
-            // Check if all viruses are cleared (unlikely but possible)
-            if (this.grid.countViruses() === 0) {
-                this.levelComplete();
+                }
             } else {
-                // Spawn a new capsule
-                this.spawnCapsule();
+                // No matches found, but check if we need to apply gravity
+                // This ensures disconnected blocks will fall even if there are no matches
+                this.gameState = GAME_STATE.FALLING;
+                const gravityResult = await this.grid.applyGravity();
+                
+                if (gravityResult) {
+                    // Blocks fell, play sound and wait
+                    this.audioManager.play('DROP');
+                    await new Promise(resolve => setTimeout(resolve, GAME.GRAVITY_DELAY));
+                    
+                    // Check for new matches after blocks have fallen
+                    const newMatches = this.grid.checkForMatches();
+                    if (newMatches.size === 0) {
+                        boardStabilized = true;
+                    }
+                } else {
+                    // No blocks fell and no matches, the board is stable
+                    boardStabilized = true;
+                }
             }
+            
+            // Update UI after each iteration
+            this.updateUI();
+        }
+        
+        // Board is now stable, check game state
+        if (this.grid.countViruses() === 0) {
+            this.levelComplete();
+        } else {
+            // Reset combo if no chain reaction occurred
+            if (!chainReactionOccurred || this.combo <= 1) {
+                this.combo = 0;
+            }
+            
+            // Continue the game
+            this.gameState = GAME_STATE.PLAYING;
+            this.spawnCapsule();
         }
     }
 

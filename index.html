@@ -35,22 +35,31 @@
         <!-- Instructions Screen -->
         <div id="instructions" class="screen hidden">
             <h2>How to Play</h2>
-            <div class="instructions-content">
-                <div class="instruction-section">
-                    <h3>Objective</h3>
-                    <p>Eliminate all viruses by matching 4 or more blocks of the same color vertically or horizontally.</p>
+            <div class="compact-instructions">
+                <div class="instruction-row">
+                    <div class="instruction-box">
+                        <h3>Objective</h3>
+                        <p>Eliminate viruses by matching 4+ blocks of the same color vertically or horizontally.</p>
+                    </div>
+                    <div class="instruction-box">
+                        <h3>Tips</h3>
+                        <ul>
+                            <li>Create chain reactions</li>
+                            <li>Watch for falling capsule halves</li>
+                            <li>Higher levels = more viruses</li>
+                        </ul>
+                    </div>
                 </div>
-                
-                <div class="instruction-section">
+                <div class="instruction-row controls-section">
                     <h3>Controls</h3>
-                    <div class="controls-grid">
+                    <div class="controls-compact-grid">
                         <div class="control-item">
                             <div class="key-icon">←</div>
-                            <div class="key-action">Move Left</div>
+                            <div class="key-action">Left</div>
                         </div>
                         <div class="control-item">
                             <div class="key-icon">→</div>
-                            <div class="key-action">Move Right</div>
+                            <div class="key-action">Right</div>
                         </div>
                         <div class="control-item">
                             <div class="key-icon">↑</div>
@@ -58,25 +67,16 @@
                         </div>
                         <div class="control-item">
                             <div class="key-icon">↓</div>
-                            <div class="key-action">Drop Faster</div>
+                            <div class="key-action">Fast Drop</div>
                         </div>
                         <div class="control-item">
                             <div class="key-icon">P</div>
-                            <div class="key-action">Pause Game</div>
+                            <div class="key-action">Pause</div>
                         </div>
                     </div>
                 </div>
-                
-                <div class="instruction-section">
-                    <h3>Tips</h3>
-                    <ul>
-                        <li>Plan your moves carefully to create chain reactions</li>
-                        <li>Watch for falling capsule halves after matches</li>
-                        <li>Higher levels have more viruses</li>
-                    </ul>
-                </div>
             </div>
-            <button id="back-from-instructions" class="btn back-btn">Back to Menu</button>
+            <button id="back-from-instructions" class="btn primary-btn">Back to Menu</button>
         </div>
 
         <!-- Game Screen -->

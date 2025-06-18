@@ -4,11 +4,13 @@ const GAME = {
     GRID_HEIGHT: 16,
     CELL_SIZE: 30,
     MAX_LEVEL: 20,
-    INITIAL_FALL_SPEED: 800,  // milliseconds between automatic drops
-    SPEED_INCREASE_PER_LEVEL: 50,  // ms faster per level
-    MIN_FALL_SPEED: 100,  // fastest possible fall speed
+    INITIAL_FALL_SPEED: 800,  // milliseconds between automatic drops (constant for all levels)
+    SPEED_INCREASE_PER_LEVEL: 0,   // no speed increase per level
+    MIN_FALL_SPEED: 100,  // minimum fall speed (not used with constant speed)
     MATCH_DELAY: 300,  // delay before clearing matches (ms)
     GRAVITY_DELAY: 200,  // delay before applying gravity (ms)
+    FALL_ANIMATION_STEP: 100, // ms between each step of falling animation
+    FALL_ANIMATION_STEPS: 3,  // number of visual steps in the falling animation
     POINTS: {
         MATCH: 100,      // points per matched block
         VIRUS: 400,      // additional points per virus cleared
