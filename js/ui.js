@@ -175,6 +175,14 @@ class UI {
         for (let i = 0; i < 2; i++) {
             const capsulePart = document.createElement('div');
             capsulePart.className = `capsule-part ${nextCapsule.colors[i]}`;
+            
+            // Add spherocylinder shape for connected capsules
+            if (i === 0) {
+                capsulePart.dataset.connected = 'right';
+            } else {
+                capsulePart.dataset.connected = 'left';
+            }
+            
             this.elements.nextCapsule.appendChild(capsulePart);
         }
     }

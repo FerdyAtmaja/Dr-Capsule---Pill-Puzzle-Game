@@ -1,7 +1,7 @@
 class AudioManager {
     constructor() {
         this.sounds = {};
-        this.muted = false;
+        this.muted = true;
         this.initialize();
     }
 

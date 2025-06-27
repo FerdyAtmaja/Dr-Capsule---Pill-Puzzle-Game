@@ -33,12 +33,32 @@ class Grid {
                     
                     if (content.type === 'virus') {
                         contentElement.className = `virus ${content.color}`;
+                        
+                        // Add eye highlights for cartoon effect
+                        const leftHighlight = document.createElement('div');
+                        leftHighlight.className = 'eye-highlight';
+                        leftHighlight.style.position = 'absolute';
+                        leftHighlight.style.left = '18%';
+                        leftHighlight.style.top = '23%';
+                        contentElement.appendChild(leftHighlight);
+                        
+                        const rightHighlight = document.createElement('div');
+                        rightHighlight.className = 'eye-highlight';
+                        rightHighlight.style.position = 'absolute';
+                        rightHighlight.style.right = '18%';
+                        rightHighlight.style.top = '23%';
+                        contentElement.appendChild(rightHighlight);
                     } else if (content.type === 'capsule') {
                         contentElement.className = `capsule-part ${content.color}`;
                         
-                        // Add connection visual cues if needed
+                        // Add connection direction for proper shape
                         if (content.connected) {
-                            contentElement.dataset.connected = content.connected;
+                            const direction = this.getConnectionDirection(x, y, content.connected);
+                            if (direction) {
+                                contentElement.dataset.connected = direction;
+                            }
+                        } else if (content.remainingSide) {
+                            contentElement.dataset.remaining = content.remainingSide;
                         }
                     }
                     
@@ -170,64 +190,70 @@ class Grid {
     clearMatches(matches) {
         let virusesCleared = 0;
         
-        // First, collect all connection IDs that will be affected by the matches
-        const affectedConnections = new Set();
+        // Store connection directions before clearing
+        const connectionDirections = new Map();
         
+        // First pass: store all connection directions for affected capsules
+        for (let y = 0; y < this.height; y++) {
+            for (let x = 0; x < this.width; x++) {
+                const cell = this.cells[y][x];
+                if (cell && cell.type === 'capsule' && cell.connected) {
+                    const direction = this.getConnectionDirection(x, y, cell.connected);
+                    if (direction) {
+                        connectionDirections.set(`${x},${y}`, direction);
+                    }
+                }
+            }
+        }
+        
+        // Collect affected connection IDs
+        const affectedConnections = new Set();
         matches.forEach(match => {
             const [x, y] = match.split(',').map(Number);
             const cell = this.cells[y][x];
-            
             if (cell && cell.type === 'capsule' && cell.connected) {
                 affectedConnections.add(cell.connected);
             }
         });
         
-        // Now clear the matches
+        // Clear the matches
         matches.forEach(match => {
             const [x, y] = match.split(',').map(Number);
-            
             if (this.cells[y][x] && this.cells[y][x].type === 'virus') {
                 virusesCleared++;
             }
-            
             this.cells[y][x] = null;
         });
         
-        // After clearing matches, we need to check if any capsule parts are now disconnected
-        // This is the Doctor Mario behavior - capsule halves only become independent after one is cleared
+        // Check for disconnected capsule parts
         for (let y = 0; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
                 const cell = this.cells[y][x];
                 
                 if (cell && cell.type === 'capsule' && cell.connected && affectedConnections.has(cell.connected)) {
-                    // This cell has a connection ID that was affected by the matches
-                    // Check if it still has a connected partner
+                    // Check if still has connection
                     let hasConnection = false;
+                    const directions = [
+                        { name: 'left', dx: -1, dy: 0 },
+                        { name: 'right', dx: 1, dy: 0 },
+                        { name: 'up', dx: 0, dy: -1 },
+                        { name: 'down', dx: 0, dy: 1 }
+                    ];
                     
-                    // Check all four directions
-                    const directions = ['left', 'right', 'up', 'down'];
                     for (const dir of directions) {
-                        let nx = x, ny = y;
-                        
-                        switch (dir) {
-                            case 'left': nx--; break;
-                            case 'right': nx++; break;
-                            case 'up': ny--; break;
-                            case 'down': ny++; break;
-                        }
-                        
+                        const nx = x + dir.dx;
+                        const ny = y + dir.dy;
                         const neighbor = this.getCellContent(nx, ny);
-                        if (neighbor && 
-                            neighbor.type === 'capsule' && 
-                            neighbor.connected === cell.connected) {
+                        if (neighbor && neighbor.type === 'capsule' && neighbor.connected === cell.connected) {
                             hasConnection = true;
                             break;
                         }
                     }
                     
-                    // If no connection found, this is now a standalone block
                     if (!hasConnection) {
+                        const originalDirection = connectionDirections.get(`${x},${y}`);
                         this.cells[y][x].connected = null;
+                        this.cells[y][x].remainingSide = this.getOppositeSide(originalDirection);
                     }
                 }
             }
@@ -278,7 +304,8 @@ class Grid {
                         cell: { 
                             type: cell.type,
                             color: cell.color,
-                            connected: cell.connected ? cell.connected : null
+                            connected: cell.connected ? cell.connected : null,
+                            remainingSide: cell.remainingSide || null
                         }
                     });
                     
@@ -374,12 +401,32 @@ class Grid {
                     
                     if (content.type === 'virus') {
                         contentElement.className = `virus ${content.color}`;
+                        
+                        // Add eye highlights for cartoon effect
+                        const leftHighlight = document.createElement('div');
+                        leftHighlight.className = 'eye-highlight';
+                        leftHighlight.style.position = 'absolute';
+                        leftHighlight.style.left = '18%';
+                        leftHighlight.style.top = '23%';
+                        contentElement.appendChild(leftHighlight);
+                        
+                        const rightHighlight = document.createElement('div');
+                        rightHighlight.className = 'eye-highlight';
+                        rightHighlight.style.position = 'absolute';
+                        rightHighlight.style.right = '18%';
+                        rightHighlight.style.top = '23%';
+                        contentElement.appendChild(rightHighlight);
                     } else if (content.type === 'capsule') {
                         contentElement.className = `capsule-part ${content.color}`;
                         
-                        // Add connection visual cues if needed
+                        // Add connection direction for proper shape
                         if (content.connected) {
-                            contentElement.dataset.connected = content.connected;
+                            const direction = this.getConnectionDirection(x, y, content.connected, tempGrid);
+                            if (direction) {
+                                contentElement.dataset.connected = direction;
+                            }
+                        } else if (content.remainingSide) {
+                            contentElement.dataset.remaining = content.remainingSide;
                         }
                         
                         // Add falling animation class if this is a falling block
@@ -516,6 +563,44 @@ class Grid {
         
         // Check both cells where a new capsule would spawn (horizontal orientation)
         return !this.isCellEmpty(startX, startY) || !this.isCellEmpty(startX + 1, startY);
+    }
+
+    // Get connection direction for capsule shape
+    getConnectionDirection(x, y, connectionId, grid = null) {
+        const cells = grid || this.cells;
+        const directions = [
+            { name: 'left', dx: -1, dy: 0 },
+            { name: 'right', dx: 1, dy: 0 },
+            { name: 'top', dx: 0, dy: -1 },
+            { name: 'bottom', dx: 0, dy: 1 }
+        ];
+        
+        for (const dir of directions) {
+            const nx = x + dir.dx;
+            const ny = y + dir.dy;
+            
+            if (nx >= 0 && nx < this.width && ny >= 0 && ny < this.height) {
+                const neighbor = cells[ny][nx];
+                if (neighbor && 
+                    neighbor.type === 'capsule' && 
+                    neighbor.connected === connectionId) {
+                    return dir.name;
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    // Get opposite side direction
+    getOppositeSide(direction) {
+        const opposites = {
+            'left': 'right',
+            'right': 'left',
+            'top': 'bottom',
+            'bottom': 'top'
+        };
+        return opposites[direction] || null;
     }
 
     // Check if a cell has a connection in a specific direction

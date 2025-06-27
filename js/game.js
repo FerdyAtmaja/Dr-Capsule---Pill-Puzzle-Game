@@ -167,7 +167,13 @@ class Game {
         
         this.currentCapsule.clear();
         const moved = this.currentCapsule.move(direction);
-        this.currentCapsule.draw();
+        
+        // If the capsule was placed (moved is false and direction is DOWN),
+        // the place() method has already been called, so we don't need to draw
+        if (moved || direction !== DIRECTION.DOWN) {
+            this.currentCapsule.draw();
+        }
+        
         this.grid.render();
         
         return moved;

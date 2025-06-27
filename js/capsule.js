@@ -167,14 +167,22 @@ class Capsule {
         
         const positions = this.getPositions();
         
+        // Make sure we have both parts of the capsule
+        if (positions.length !== 2) {
+            console.error("Error: Capsule should have exactly 2 parts");
+            return;
+        }
+        
         // Place both parts of the capsule
         for (let i = 0; i < positions.length; i++) {
             const pos = positions[i];
-            this.grid.setCellContent(pos.x, pos.y, {
-                type: 'capsule',
-                color: this.colors[i],
-                connected: this.id // Mark both parts as connected to each other
-            });
+            if (this.grid.isValidPosition(pos.x, pos.y)) {
+                this.grid.setCellContent(pos.x, pos.y, {
+                    type: 'capsule',
+                    color: this.colors[i],
+                    connected: this.id // Mark both parts as connected to each other
+                });
+            }
         }
         
         this.active = false;
@@ -224,10 +232,35 @@ class Capsule {
     hardDrop() {
         if (!this.active) return false;
         
-        let moved = true;
-        while (moved) {
-            moved = this.move(DIRECTION.DOWN);
+        // Find the maximum distance the capsule can drop
+        let maxDropDistance = 0;
+        let canDrop = true;
+        
+        while (canDrop) {
+            // Check if the capsule can move down one more row
+            const positions = this.getPositions();
+            canDrop = true;
+            
+            for (const pos of positions) {
+                const newY = pos.y + maxDropDistance + 1;
+                if (newY >= GAME.GRID_HEIGHT || !this.grid.isCellEmpty(pos.x, newY)) {
+                    canDrop = false;
+                    break;
+                }
+            }
+            
+            if (canDrop) {
+                maxDropDistance++;
+            }
         }
+        
+        // Move the capsule down by the maximum distance
+        if (maxDropDistance > 0) {
+            this.y += maxDropDistance;
+        }
+        
+        // Place the capsule
+        this.place();
         
         return true;
     }
