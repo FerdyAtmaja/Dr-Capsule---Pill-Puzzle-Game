@@ -33,8 +33,6 @@ class VirusManager {
             
             // Ensure we don't place viruses in the same position
             if (!positions.has(posKey)) {
-                positions.add(posKey);
-                
                 // Find the color with the lowest count
                 let minColor = COLORS[0];
                 COLORS.forEach(color => {
@@ -54,13 +52,33 @@ class VirusManager {
                     selectedColor = COLORS[Math.floor(Math.random() * COLORS.length)];
                 }
                 
-                colorCounts[selectedColor]++;
-                
-                viruses.push({
-                    x,
-                    y,
-                    color: selectedColor
-                });
+                // Validate that this color won't create more than 3 consecutive viruses
+                if (this.isValidVirusPlacement(viruses, x, y, selectedColor)) {
+                    positions.add(posKey);
+                    colorCounts[selectedColor]++;
+                    
+                    viruses.push({
+                        x,
+                        y,
+                        color: selectedColor
+                    });
+                } else {
+                    // Try other colors if the preferred one creates too many consecutive
+                    let validColorFound = false;
+                    for (const color of COLORS) {
+                        if (this.isValidVirusPlacement(viruses, x, y, color)) {
+                            positions.add(posKey);
+                            colorCounts[color]++;
+                            viruses.push({ x, y, color });
+                            validColorFound = true;
+                            break;
+                        }
+                    }
+                    // If no valid color found, skip this position
+                    if (!validColorFound) {
+                        continue;
+                    }
+                }
             }
         }
         
@@ -147,15 +165,9 @@ class VirusManager {
                 const x = Math.floor(Math.random() * GAME.GRID_WIDTH);
                 if (!rowPositions.has(x)) {
                     rowPositions.add(x);
-                    const posKey = `${x},${y}`;
-                    if (!positions.has(posKey)) {
-                        positions.add(posKey);
-                        viruses.push({
-                            x,
-                            y,
-                            color: COLORS[Math.floor(Math.random() * COLORS.length)]
-                        });
-                    }
+                    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+                    this.addVirusIfPossible(viruses, positions, x, y, color);
+                    rowPositions.add(x);
                 }
             }
         }
@@ -182,21 +194,13 @@ class VirusManager {
         const positions = new Set();
         const virusCount = level * 4;
         
-        // Create columns of viruses
+        // Create columns of viruses with max 3 consecutive
         for (let x = 0; x < GAME.GRID_WIDTH; x++) {
-            const columnHeight = 4 + Math.floor(Math.random() * (GAME.GRID_HEIGHT - 8));
+            const columnHeight = Math.min(3, 2 + Math.floor(Math.random() * 2)); // Max 3 high
             const columnColor = COLORS[Math.floor(Math.random() * COLORS.length)];
             
             for (let y = GAME.GRID_HEIGHT - 1; y >= GAME.GRID_HEIGHT - columnHeight && viruses.length < virusCount; y--) {
-                const posKey = `${x},${y}`;
-                if (!positions.has(posKey)) {
-                    positions.add(posKey);
-                    viruses.push({
-                        x,
-                        y,
-                        color: columnColor
-                    });
-                }
+                this.addVirusIfPossible(viruses, positions, x, y, columnColor);
             }
         }
         
@@ -257,7 +261,7 @@ class VirusManager {
     addVirusIfPossible(virusList, positionSet, x, y, color) {
         if (x >= 0 && x < GAME.GRID_WIDTH && y >= 4 && y < GAME.GRID_HEIGHT) {
             const posKey = `${x},${y}`;
-            if (!positionSet.has(posKey)) {
+            if (!positionSet.has(posKey) && this.isValidVirusPlacement(virusList, x, y, color)) {
                 positionSet.add(posKey);
                 virusList.push({
                     x,
@@ -268,5 +272,55 @@ class VirusManager {
             }
         }
         return false;
+    }
+
+    // Check if placing a virus at position (x,y) with given color would create more than 3 consecutive
+    isValidVirusPlacement(existingViruses, x, y, color) {
+        // Create a temporary grid to check consecutive count
+        const tempGrid = {};
+        existingViruses.forEach(virus => {
+            tempGrid[`${virus.x},${virus.y}`] = virus.color;
+        });
+        
+        // Check horizontal consecutive count
+        let horizontalCount = 1;
+        // Count left
+        for (let i = x - 1; i >= 0; i--) {
+            if (tempGrid[`${i},${y}`] === color) {
+                horizontalCount++;
+            } else {
+                break;
+            }
+        }
+        // Count right
+        for (let i = x + 1; i < GAME.GRID_WIDTH; i++) {
+            if (tempGrid[`${i},${y}`] === color) {
+                horizontalCount++;
+            } else {
+                break;
+            }
+        }
+        
+        // Check vertical consecutive count
+        let verticalCount = 1;
+        // Count up
+        for (let i = y - 1; i >= 0; i--) {
+            if (tempGrid[`${x},${i}`] === color) {
+                verticalCount++;
+            } else {
+                break;
+            }
+        }
+        // Count down
+        for (let i = y + 1; i < GAME.GRID_HEIGHT; i++) {
+            if (tempGrid[`${x},${i}`] === color) {
+                verticalCount++;
+            } else {
+                break;
+            }
+        }
+        
+        // Return false if either direction would have more than 3 consecutive
+        return horizontalCount <= 3 && verticalCount <= 3;
     }
 }

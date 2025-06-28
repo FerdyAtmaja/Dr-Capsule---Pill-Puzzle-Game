@@ -128,10 +128,12 @@ class UI {
                 const elements = this.screens[screenName].querySelectorAll('h2, .result-stats, .menu-buttons');
                 elements.forEach((el, index) => {
                     el.style.opacity = '0';
-                    el.classList.add('fall-in');
+                    el.style.transform = 'translateY(-30px) scale(0.8)';
+                    el.classList.add('slide-in');
                     setTimeout(() => {
                         el.style.opacity = '1';
-                    }, index * 200);
+                        el.style.transform = 'translateY(0) scale(1)';
+                    }, index * 150);
                 });
             }
         }

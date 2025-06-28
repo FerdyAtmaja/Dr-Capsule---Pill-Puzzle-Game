@@ -498,6 +498,7 @@ h3 {
     border-radius: 10px;
     text-align: center;
     border: 3px solid #444;
+    animation: zoom-in 0.5s ease-out;
 }
 
 .result-stats {
@@ -553,13 +554,38 @@ h3 {
     animation: flash 0.5s 2;
 }
 
-@keyframes fall {
-    0% { transform: translateY(-30px) rotate(-10deg); opacity: 0; }
-    100% { transform: translateY(0) rotate(0deg); opacity: 1; }
+@keyframes slide-in {
+    0% { 
+        transform: translateY(-30px) scale(0.8); 
+        opacity: 0; 
+    }
+    100% { 
+        transform: translateY(0) scale(1); 
+        opacity: 1; 
+    }
 }
 
-.fall-in {
-    animation: fall 0.5s forwards;
+.slide-in {
+    animation: slide-in 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+@keyframes zoom-in {
+    0% {
+        transform: scale(0.5);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.05);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.result-screen {
+    animation: zoom-in 0.5s ease-out;
 }
 
 @keyframes pulse {
