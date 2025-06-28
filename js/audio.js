@@ -27,6 +27,8 @@ class AudioManager {
     }
 
     play(soundName) {
+        return; // Audio deactivated
+        
         if (this.muted) return;
         
         const sound = this.sounds[soundName];

@@ -357,8 +357,15 @@ h3 {
     border: 3px solid #ffffff;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), 0 0 15px rgba(255, 255, 255, 0.2);
     animation: virus-bounce 1s ease-in-out infinite;
+    animation-fill-mode: both;
+    animation-play-state: running;
     will-change: transform, border-radius;
 }
+
+.virus:nth-child(2n) { animation-delay: -0.2s; }
+.virus:nth-child(3n) { animation-delay: -0.4s; }
+.virus:nth-child(5n) { animation-delay: -0.6s; }
+.virus:nth-child(7n) { animation-delay: -0.8s; }
 
 /* Cartoon eyes */
 .virus::before, .virus::after {
@@ -371,6 +378,8 @@ h3 {
     top: 20%;
     border: 2px solid #000;
     animation: virus-blink 3s infinite;
+    animation-fill-mode: both;
+    animation-play-state: running;
     will-change: transform;
 }
 
@@ -383,6 +392,11 @@ h3 {
     right: 15%;
     animation-delay: 0.1s;
 }
+
+.virus:nth-child(2n)::before { animation-delay: -0.5s; }
+.virus:nth-child(2n)::after { animation-delay: -0.4s; }
+.virus:nth-child(4n)::before { animation-delay: -1s; }
+.virus:nth-child(4n)::after { animation-delay: -0.9s; }
 
 /* Eye highlights */
 .virus .eye-highlight {

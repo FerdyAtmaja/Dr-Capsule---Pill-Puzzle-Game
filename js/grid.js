@@ -14,6 +14,70 @@ class Grid {
     }
 
     render() {
+        // Only clear and recreate if grid structure changed
+        if (this.element.children.length !== this.width * this.height) {
+            this.fullRender();
+            return;
+        }
+        
+        // Update existing cells without recreating virus elements
+        for (let y = 0; y < this.height; y++) {
+            for (let x = 0; x < this.width; x++) {
+                const cellIndex = y * this.width + x;
+                const cell = this.element.children[cellIndex];
+                const content = this.cells[y][x];
+                
+                // Skip if this is a virus and element already exists (preserve animation)
+                if (content && content.type === 'virus' && cell.children.length > 0) {
+                    continue;
+                }
+                
+                // Clear content if not a virus or virus doesn't exist yet
+                if (!content || content.type !== 'virus' || cell.children.length === 0) {
+                    cell.innerHTML = '';
+                }
+                
+                if (content) {
+                    if (content.type === 'virus' && cell.children.length === 0) {
+                        const contentElement = document.createElement('div');
+                        contentElement.className = `virus ${content.color}`;
+                        
+                        const leftHighlight = document.createElement('div');
+                        leftHighlight.className = 'eye-highlight';
+                        leftHighlight.style.position = 'absolute';
+                        leftHighlight.style.left = '18%';
+                        leftHighlight.style.top = '23%';
+                        contentElement.appendChild(leftHighlight);
+                        
+                        const rightHighlight = document.createElement('div');
+                        rightHighlight.className = 'eye-highlight';
+                        rightHighlight.style.position = 'absolute';
+                        rightHighlight.style.right = '18%';
+                        rightHighlight.style.top = '23%';
+                        contentElement.appendChild(rightHighlight);
+                        
+                        cell.appendChild(contentElement);
+                    } else if (content.type === 'capsule') {
+                        const contentElement = document.createElement('div');
+                        contentElement.className = `capsule-part ${content.color}`;
+                        
+                        if (content.connected) {
+                            const direction = this.getConnectionDirection(x, y, content.connected);
+                            if (direction) {
+                                contentElement.dataset.connected = direction;
+                            }
+                        } else if (content.remainingSide) {
+                            contentElement.dataset.remaining = content.remainingSide;
+                        }
+                        
+                        cell.appendChild(contentElement);
+                    }
+                }
+            }
+        }
+    }
+    
+    fullRender() {
         // Clear the game board
         this.element.innerHTML = '';
         this.element.style.gridTemplateColumns = `repeat(${this.width}, 1fr)`;
@@ -263,65 +327,37 @@ class Grid {
     }
 
     applyGravity() {
-        // First, identify disconnected capsule parts that should fall
-        const disconnectedParts = this.findDisconnectedParts();
+        let blocksFell = false;
+        let stillFalling = true;
         
-        // If no disconnected parts, return immediately
-        if (disconnectedParts.size === 0) {
-            return false;
-        }
-        
-        // Create a map of falling blocks and their destinations
-        const fallingBlocks = [];
-        
-        // Process each column separately, bottom to top
-        for (let x = 0; x < this.width; x++) {
-            // Start from the bottom-second row and move up
-            for (let y = this.height - 2; y >= 0; y--) {
-                const cell = this.cells[y][x];
-                
-                // Skip empty cells and viruses (viruses don't fall)
-                if (!cell || cell.type === 'virus') continue;
-                
-                // Only process blocks that were identified as needing to fall
-                if (!disconnectedParts.has(`${x},${y}`)) continue;
-                
-                // Check if there's empty space below
-                let fallDistance = 0;
-                let yBelow = y + 1;
-                
-                while (yBelow < this.height && this.cells[yBelow][x] === null) {
-                    fallDistance++;
-                    yBelow++;
-                }
-                
-                if (fallDistance > 0) {
-                    // Add to falling blocks list
-                    fallingBlocks.push({
-                        startX: x,
-                        startY: y,
-                        endY: y + fallDistance,
-                        cell: { 
-                            type: cell.type,
-                            color: cell.color,
-                            connected: cell.connected ? cell.connected : null,
-                            remainingSide: cell.remainingSide || null
-                        }
-                    });
+        // Keep applying gravity until no more blocks fall
+        while (stillFalling) {
+            stillFalling = false;
+            
+            // Process each column from bottom to top
+            for (let x = 0; x < this.width; x++) {
+                for (let y = this.height - 2; y >= 0; y--) {
+                    const cell = this.cells[y][x];
                     
-                    // Clear the original position
-                    this.cells[y][x] = null;
+                    // Only process standalone capsule blocks
+                    if (cell && cell.type === 'capsule' && !cell.connected) {
+                        // Check if block can fall one step
+                        if (this.cells[y + 1][x] === null) {
+                            this.cells[y + 1][x] = cell;
+                            this.cells[y][x] = null;
+                            blocksFell = true;
+                            stillFalling = true;
+                        }
+                    }
                 }
             }
         }
         
-        // If no blocks are falling, return false
-        if (fallingBlocks.length === 0) {
-            return false;
+        if (blocksFell) {
+            this.render();
         }
         
-        // Animate the falling blocks
-        return this.animateFallingBlocks(fallingBlocks);
+        return blocksFell;
     }
     
     // Animate falling blocks with a smooth transition
@@ -338,7 +374,16 @@ class Grid {
                 if (currentStep > animationSteps) {
                     // Place all blocks in their final positions
                     fallingBlocks.forEach(block => {
-                        this.cells[block.endY][block.startX] = block.cell;
+                        // Ensure the final position is valid
+                        if (block.endY >= 0 && block.endY < this.height && 
+                            block.startX >= 0 && block.startX < this.width) {
+                            this.cells[block.endY][block.startX] = {
+                                type: block.cell.type,
+                                color: block.cell.color,
+                                connected: block.cell.connected,
+                                remainingSide: block.cell.remainingSide
+                            };
+                        }
                     });
                     
                     // Render the final state
@@ -453,8 +498,7 @@ class Grid {
         const disconnectedParts = new Set();
         const standaloneBlocks = new Set();
         
-        // First pass: Find only capsule parts that have been split due to matches
-        // (no longer connected to their other half)
+        // First pass: Find capsule parts that have been split due to matches
         for (let y = 0; y < this.height; y++) {
             for (let x = 0; x < this.width; x++) {
                 const cell = this.cells[y][x];
@@ -463,11 +507,10 @@ class Grid {
                 if (!cell || cell.type === 'virus') continue;
                 
                 if (cell.type === 'capsule' && cell.connected) {
-                    // Check if this is a disconnected capsule part
-                    // (no other part with the same connection ID)
+                    // Check if this capsule part still has its connected partner
                     let hasConnection = false;
                     
-                    // Check all four directions
+                    // Check all four directions for connected partner
                     const directions = ['left', 'right', 'up', 'down'];
                     for (const dir of directions) {
                         let nx = x, ny = y;
@@ -488,11 +531,15 @@ class Grid {
                         }
                     }
                     
-                    // If no connection found, this is a disconnected piece due to a match
+                    // If no connection found, convert to standalone block
                     if (!hasConnection) {
                         standaloneBlocks.add(`${x},${y}`);
-                        // Mark this as a standalone block by removing the connection ID
+                        // Convert to standalone by removing connection and adding remainingSide
+                        const originalDirection = this.getConnectionDirection(x, y, cell.connected);
                         this.cells[y][x].connected = null;
+                        if (originalDirection) {
+                            this.cells[y][x].remainingSide = this.getOppositeSide(originalDirection);
+                        }
                     }
                 } else if (cell.type === 'capsule' && !cell.connected) {
                     // Already a standalone block
@@ -501,28 +548,33 @@ class Grid {
             }
         }
         
-        // Second pass: Only check for gravity on standalone blocks
-        // Connected capsule parts should never fall individually
-        for (let x = 0; x < this.width; x++) {
-            // Process from bottom to top to properly handle stacked blocks
-            for (let y = this.height - 2; y >= 0; y--) {
-                const cell = this.cells[y][x];
-                
-                // Skip empty cells and viruses
-                if (!cell || cell.type === 'virus') continue;
-                
-                if (cell.type === 'capsule') {
-                    // Check if this is a standalone block (not part of a connected capsule)
-                    if (!cell.connected || standaloneBlocks.has(`${x},${y}`)) {
-                        // Check if there's empty space below
+        // Second pass: Identify all blocks that need to fall using multiple passes
+        // Continue until no new falling blocks are found
+        let foundNewFallingBlocks = true;
+        while (foundNewFallingBlocks) {
+            foundNewFallingBlocks = false;
+            
+            for (let x = 0; x < this.width; x++) {
+                for (let y = this.height - 2; y >= 0; y--) {
+                    const cell = this.cells[y][x];
+                    
+                    // Skip if already marked as falling, empty, or virus
+                    if (!cell || cell.type === 'virus' || disconnectedParts.has(`${x},${y}`)) continue;
+                    
+                    // Only process standalone capsule blocks
+                    if (cell.type === 'capsule' && !cell.connected) {
+                        // Check if space below is empty
                         if (this.cells[y + 1][x] === null) {
                             disconnectedParts.add(`${x},${y}`);
+                            foundNewFallingBlocks = true;
                         }
-                        // Also check if the part below is a disconnected part that will fall
+                        // Check if block below is also falling
                         else if (this.cells[y + 1][x] && 
                                 this.cells[y + 1][x].type === 'capsule' && 
+                                !this.cells[y + 1][x].connected &&
                                 disconnectedParts.has(`${x},${y+1}`)) {
                             disconnectedParts.add(`${x},${y}`);
+                            foundNewFallingBlocks = true;
                         }
                     }
                 }
