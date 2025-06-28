@@ -339,14 +339,30 @@ class Grid {
                 for (let y = this.height - 2; y >= 0; y--) {
                     const cell = this.cells[y][x];
                     
-                    // Only process standalone capsule blocks
-                    if (cell && cell.type === 'capsule' && !cell.connected) {
-                        // Check if block can fall one step
-                        if (this.cells[y + 1][x] === null) {
-                            this.cells[y + 1][x] = cell;
-                            this.cells[y][x] = null;
-                            blocksFell = true;
-                            stillFalling = true;
+                    if (cell && cell.type === 'capsule') {
+                        if (!cell.connected) {
+                            // Standalone capsule block
+                            if (this.cells[y + 1][x] === null) {
+                                this.cells[y + 1][x] = cell;
+                                this.cells[y][x] = null;
+                                blocksFell = true;
+                                stillFalling = true;
+                            }
+                        } else {
+                            // Connected capsule block - use OR logic
+                            if (this.shouldConnectedCapsuleFall(x, y, cell.connected)) {
+                                // Move both parts of the connected capsule
+                                const partnerPos = this.findConnectedPartner(x, y, cell.connected);
+                                if (partnerPos && this.cells[y + 1][x] === null && this.cells[partnerPos.y + 1][partnerPos.x] === null) {
+                                    // Move both parts down
+                                    this.cells[y + 1][x] = cell;
+                                    this.cells[partnerPos.y + 1][partnerPos.x] = this.cells[partnerPos.y][partnerPos.x];
+                                    this.cells[y][x] = null;
+                                    this.cells[partnerPos.y][partnerPos.x] = null;
+                                    blocksFell = true;
+                                    stillFalling = true;
+                                }
+                            }
                         }
                     }
                 }
@@ -653,6 +669,53 @@ class Grid {
             'bottom': 'top'
         };
         return opposites[direction] || null;
+    }
+
+    // Check if connected capsule should fall using OR logic
+    shouldConnectedCapsuleFall(x, y, connectionId) {
+        const partnerPos = this.findConnectedPartner(x, y, connectionId);
+        if (!partnerPos) return false;
+        
+        // Check if either part has no foundation (OR logic)
+        const currentHasFoundation = this.hasFoundation(x, y);
+        const partnerHasFoundation = this.hasFoundation(partnerPos.x, partnerPos.y);
+        
+        // Fall if either part lacks foundation
+        return !currentHasFoundation || !partnerHasFoundation;
+    }
+
+    // Find the connected partner of a capsule part
+    findConnectedPartner(x, y, connectionId) {
+        const directions = [
+            { dx: -1, dy: 0 }, // left
+            { dx: 1, dy: 0 },  // right
+            { dx: 0, dy: -1 }, // up
+            { dx: 0, dy: 1 }   // down
+        ];
+        
+        for (const dir of directions) {
+            const nx = x + dir.dx;
+            const ny = y + dir.dy;
+            
+            if (this.isValidPosition(nx, ny)) {
+                const neighbor = this.cells[ny][nx];
+                if (neighbor && neighbor.type === 'capsule' && neighbor.connected === connectionId) {
+                    return { x: nx, y: ny };
+                }
+            }
+        }
+        
+        return null;
+    }
+
+    // Check if a position has foundation (something solid below it)
+    hasFoundation(x, y) {
+        // Check if at bottom of grid
+        if (y >= this.height - 1) return true;
+        
+        // Check if there's something solid below
+        const below = this.cells[y + 1][x];
+        return below !== null;
     }
 
     // Check if a cell has a connection in a specific direction
